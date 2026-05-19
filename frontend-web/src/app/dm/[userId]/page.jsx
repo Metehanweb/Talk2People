@@ -27,6 +27,8 @@ export default function DmPage() {
     const [targetUser, setTargetUser] = useState(null);
     const [messages, setMessages] = useState([]);
     const [message, setMessage] = useState('');
+    const [editingMessageId, setEditingMessageId] = useState(null);
+    const [editingText, setEditingText] = useState('');
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
     const [error, setError] = useState('');
@@ -95,6 +97,29 @@ export default function DmPage() {
             setError(err.message);
         } finally {
             setSending(false);
+        }
+    }
+
+    async function handleEditMessage(messageId) {
+        const text = editingText.trim();
+        if (!text) return;
+        try {
+            const res = await dmService.editMessage(messageId, text);
+            setMessages(items => items.map(item => item._id === messageId ? res.data : item));
+            setEditingMessageId(null);
+            setEditingText('');
+        } catch (err) {
+            setError(err.message);
+        }
+    }
+
+    async function handleDeleteMessage(messageId) {
+        if (!confirm('Bu mesajı silmek istediğine emin misin?')) return;
+        try {
+            await dmService.deleteMessage(messageId);
+            setMessages(items => items.filter(item => item._id !== messageId));
+        } catch (err) {
+            setError(err.message);
         }
     }
 
@@ -348,6 +373,15 @@ export default function DmPage() {
     const currentUserId = currentUser?._id || currentUser?.userId;
     const remoteSpeaking = speakingSockets.size > 0;
 
+    function renderAvatar(user, className = 'user-avatar', style = {}) {
+        const url = user?.profil_fotografi_url;
+        return (
+            <div className={className} style={url ? { ...style, backgroundImage: `url(${url})`, backgroundSize: 'cover', backgroundPosition: 'center' } : style}>
+                {!url && (user?.username || '?')[0].toUpperCase()}
+            </div>
+        );
+    }
+
     if (loading) {
         return (
             <div className="loading-screen" style={{ height: '100vh' }}>
@@ -413,15 +447,11 @@ export default function DmPage() {
                             </div>
                             <div className="dm-voice-users">
                                 <div className="dm-voice-user">
-                                    <div className={`user-avatar ${localSpeaking && !isMuted && hasMicrophone ? 'voice-speaking' : ''}`}>
-                                        {(currentUser?.username || '?')[0].toUpperCase()}
-                                    </div>
+                                    {renderAvatar(currentUser, `user-avatar ${localSpeaking && !isMuted && hasMicrophone ? 'voice-speaking' : ''}`)}
                                     <span>{currentUser?.username || 'Sen'}</span>
                                 </div>
                                 <div className="dm-voice-user">
-                                    <div className={`user-avatar ${remoteSpeaking ? 'voice-speaking' : ''}`}>
-                                        {(targetUser?.username || '?')[0].toUpperCase()}
-                                    </div>
+                                    {renderAvatar(targetUser, `user-avatar ${remoteSpeaking ? 'voice-speaking' : ''}`)}
                                     <span>{targetUser?.username || 'Karsi taraf'}</span>
                                 </div>
                             </div>
@@ -451,10 +481,26 @@ export default function DmPage() {
                                                 wordBreak: 'break-word',
                                             }}
                                         >
-                                            <div style={{ fontSize: 14, lineHeight: 1.45 }}>{item.icerik}</div>
+                                            {editingMessageId === item._id ? (
+                                                <div style={{ display: 'flex', gap: 8 }}>
+                                                    <input className="field-input" value={editingText} onChange={e => setEditingText(e.target.value)} autoFocus />
+                                                    <button type="button" className="btn btn-primary" onClick={() => handleEditMessage(item._id)}>Kaydet</button>
+                                                    <button type="button" className="btn btn-ghost" onClick={() => setEditingMessageId(null)}>Vazgeç</button>
+                                                </div>
+                                            ) : (
+                                                <div style={{ fontSize: 14, lineHeight: 1.45 }}>{item.icerik}</div>
+                                            )}
                                             <div style={{ fontSize: 11, opacity: 0.7, marginTop: 6 }}>
                                                 {new Date(item.olusturulma_tarihi).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                                                {item.duzenlendi_mi && ' · düzenlendi'}
+                                                {mine && ` · ${item.okundu_mu ? 'Okundu' : 'Gönderildi'}`}
                                             </div>
+                                            {mine && editingMessageId !== item._id && (
+                                                <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
+                                                    <button type="button" className="message-mini-action" onClick={() => { setEditingMessageId(item._id); setEditingText(item.icerik); }}>Düzenle</button>
+                                                    <button type="button" className="message-mini-action danger" onClick={() => handleDeleteMessage(item._id)}>Sil</button>
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })}

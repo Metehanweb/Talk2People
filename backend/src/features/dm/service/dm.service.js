@@ -71,10 +71,53 @@ export class DmService {
 
         const populated = await this.directMessageRepo.model
             .findById(message._id)
-            .populate('gonderen', 'username email role')
-            .populate('alici', 'username email role');
+            .populate('gonderen', 'username email role extra_roles profil_fotografi_url durum_modu')
+            .populate('alici', 'username email role extra_roles profil_fotografi_url durum_modu');
 
         return successResponse(populated);
+    }
+
+    async editMessage(userId, messageId, content) {
+        const message = await this.directMessageRepo.get_one(messageId);
+        if (!message || message.silindi_mi) {
+            throw new NotFoundException('Mesaj bulunamadi');
+        }
+
+        if (String(message.gonderen) !== String(userId)) {
+            throw new ForbiddenException('Bu mesaji duzenleme yetkiniz yok');
+        }
+
+        const text = String(content || '').trim();
+        if (!text) {
+            throw new BadRequestException('Mesaj bos olamaz');
+        }
+
+        const updated = await this.directMessageRepo.patch(messageId, {
+            icerik: text.slice(0, 2000),
+            duzenlendi_mi: true,
+            duzenlenme_tarihi: new Date(),
+        });
+
+        const populated = await this.directMessageRepo.model
+            .findById(updated._id)
+            .populate('gonderen', 'username email role extra_roles profil_fotografi_url durum_modu')
+            .populate('alici', 'username email role extra_roles profil_fotografi_url durum_modu');
+
+        return successResponse(populated);
+    }
+
+    async deleteMessage(userId, messageId) {
+        const message = await this.directMessageRepo.get_one(messageId);
+        if (!message || message.silindi_mi) {
+            throw new NotFoundException('Mesaj bulunamadi');
+        }
+
+        if (String(message.gonderen) !== String(userId)) {
+            throw new ForbiddenException('Bu mesaji silme yetkiniz yok');
+        }
+
+        await this.directMessageRepo.soft_delete(messageId);
+        return successResponse({ message: 'Mesaj silindi' });
     }
 
     async getNotificationSummary(userId) {

@@ -11,6 +11,22 @@ const roleConfig = {
     user: { label: '👤 Kullanıcı', badgeClass: 'badge-gray' },
 };
 
+const extraRoleConfig = {
+    vip: 'VIP',
+    support: 'Destek',
+    founder: 'Kurucu',
+    tester: 'Test',
+};
+
+function Avatar({ user, className }) {
+    const url = user?.profil_fotografi_url;
+    return (
+        <div className={className} style={url ? { backgroundImage: `url(${url})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}}>
+            {!url && (user?.username || '?')[0].toUpperCase()}
+        </div>
+    );
+}
+
 function formatDateTime(value) {
     if (!value) return '-';
     return new Date(value).toLocaleString('tr-TR', {
@@ -103,7 +119,7 @@ export default function UserProfilePage() {
                     {profile && (
                         <div className="profile-detail-layout">
                             <section className="profile-hero-panel">
-                                <div className="profile-detail-avatar">{(profile.username || '?')[0].toUpperCase()}</div>
+                                <Avatar user={profile} className="profile-detail-avatar" />
                                 <div>
                                     <h1>{profile.username}</h1>
                                     <p>{profile.email}</p>
@@ -128,6 +144,10 @@ export default function UserProfilePage() {
                                 <div className="profile-detail-item">
                                     <span>Rol</span>
                                     <strong>{rc.label}</strong>
+                                </div>
+                                <div className="profile-detail-item">
+                                    <span>Ek roller</span>
+                                    <strong>{(profile.extra_roles || []).map(role => extraRoleConfig[role] || role).join(', ') || '-'}</strong>
                                 </div>
                                 <div className="profile-detail-item">
                                     <span>Durum</span>

@@ -25,6 +25,18 @@ const DirectMessageSchema = new Schema(
             type: Boolean,
             default: false,
         },
+        okundu_tarihi: {
+            type: Date,
+            default: null,
+        },
+        duzenlendi_mi: {
+            type: Boolean,
+            default: false,
+        },
+        duzenlenme_tarihi: {
+            type: Date,
+            default: null,
+        },
     },
     {
         ...baseSchemaOptions,

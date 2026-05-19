@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Query, Body, Req, UseGuards, Dependencies, Bind } from '@nestjs/common';
+import { Controller, Delete, Get, Patch, Post, Param, Query, Body, Req, UseGuards, Dependencies, Bind } from '@nestjs/common';
 import { DmService } from '../service/dm.service';
 import { JwtAuthGuard } from '../../../shared/guards/jwt-auth.guard';
 
@@ -35,5 +35,19 @@ export class DmController {
     @Bind(Param('userId'), Body(), Req())
     async sendMessage(userId, body, req) {
         return this.dmService.sendMessage(req.user.userId, userId, body.icerik);
+    }
+
+    @Patch('messages/:messageId')
+    @UseGuards(JwtAuthGuard)
+    @Bind(Param('messageId'), Body(), Req())
+    async editMessage(messageId, body, req) {
+        return this.dmService.editMessage(req.user.userId, messageId, body.icerik);
+    }
+
+    @Delete('messages/:messageId')
+    @UseGuards(JwtAuthGuard)
+    @Bind(Param('messageId'), Req())
+    async deleteMessage(messageId, req) {
+        return this.dmService.deleteMessage(req.user.userId, messageId);
     }
 }

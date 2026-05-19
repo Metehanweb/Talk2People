@@ -28,7 +28,7 @@ export class MessagesService {
         
         // Populate sender before returning so WebSocket clients have user details
         const populatedMessage = await this.messageRepo.model.findById(message._id)
-            .populate('gonderen', 'username email role')
+            .populate('gonderen', 'username email role extra_roles profil_fotografi_url durum_modu')
             .populate({
                 path: 'alinti_yapilan_mesaj',
                 populate: { path: 'gonderen', select: 'username' }
@@ -67,6 +67,37 @@ export class MessagesService {
 
         await this.messageRepo.soft_delete(messageId);
         return successResponse({ message: 'Mesaj silindi' });
+    }
+
+    async editMessage(messageId, userId, content) {
+        const message = await this.messageRepo.get_one(messageId);
+        if (!message) {
+            throw new NotFoundException('Mesaj bulunamadi');
+        }
+
+        if (message.gonderen.toString() !== userId) {
+            throw new ForbiddenException('Bu mesaji duzenleme yetkiniz yok');
+        }
+
+        const text = String(content || '').trim();
+        if (!text) {
+            throw new ForbiddenException('Mesaj bos olamaz');
+        }
+
+        const updated = await this.messageRepo.patch(messageId, {
+            icerik: text.slice(0, 2000),
+            duzenlendi_mi: true,
+            duzenlenme_tarihi: new Date(),
+        });
+
+        const populated = await this.messageRepo.model.findById(updated._id)
+            .populate('gonderen', 'username email role extra_roles profil_fotografi_url durum_modu')
+            .populate({
+                path: 'alinti_yapilan_mesaj',
+                populate: { path: 'gonderen', select: 'username' }
+            });
+
+        return successResponse(populated);
     }
 
     async toggleReaction(messageId, userId, emoji) {

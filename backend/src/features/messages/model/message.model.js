@@ -34,6 +34,14 @@ const MessageSchema = new Schema(
             type: Boolean,
             default: false,
         },
+        duzenlendi_mi: {
+            type: Boolean,
+            default: false,
+        },
+        duzenlenme_tarihi: {
+            type: Date,
+            default: null,
+        },
     },
     {
         ...baseSchemaOptions,

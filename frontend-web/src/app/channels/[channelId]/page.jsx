@@ -17,6 +17,8 @@ export default function ChatPage() {
     const [newMessage, setNewMessage] = useState('');
     const [replyingTo, setReplyingTo] = useState(null);
     const [activeReactionMessageId, setActiveReactionMessageId] = useState(null);
+    const [editingMessageId, setEditingMessageId] = useState(null);
+    const [editingText, setEditingText] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [channelPassword, setChannelPassword] = useState('');
@@ -49,6 +51,9 @@ export default function ChatPage() {
                     msg._id === data.messageId ? { ...msg, tepkiler: data.tepkiler } : msg
                 ));
             });
+            socketRef.current.on('message_updated', (data) => {
+                setMessages(prev => prev.map(msg => msg._id === data.messageId ? data.message : msg));
+            });
             socketRef.current.on('exception', (err) => {
                 setError(err.message || 'Bir bağlantı hatası oluştu');
             });
@@ -60,6 +65,7 @@ export default function ChatPage() {
                     socketRef.current.off('new_message');
                     socketRef.current.off('message_deleted');
                     socketRef.current.off('message_reaction_updated');
+                    socketRef.current.off('message_updated');
                     socketRef.current.off('exception');
                     socketRef.current.disconnect();
                 }
@@ -148,6 +154,19 @@ export default function ChatPage() {
         try {
             await messagesService.deleteMessage(channelId, messageId);
             fetchMessages(true);
+        } catch (err) {
+            setError(err.message);
+        }
+    }
+
+    async function handleEdit(messageId) {
+        const text = editingText.trim();
+        if (!text) return;
+        try {
+            const res = await messagesService.editMessage(channelId, messageId, text);
+            setMessages(prev => prev.map(msg => msg._id === messageId ? res.data : msg));
+            setEditingMessageId(null);
+            setEditingText('');
         } catch (err) {
             setError(err.message);
         }
@@ -292,7 +311,18 @@ export default function ChatPage() {
                                                         </div>
                                                     )}
                                                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-                                                        <p className="msg-text" style={{ flex: 1 }}>{msg.icerik}</p>
+                                                        {editingMessageId === msg._id ? (
+                                                            <div style={{ flex: 1, display: 'flex', gap: 8 }}>
+                                                                <input className="field-input" value={editingText} onChange={e => setEditingText(e.target.value)} autoFocus />
+                                                                <button type="button" className="btn btn-primary" onClick={() => handleEdit(msg._id)}>Kaydet</button>
+                                                                <button type="button" className="btn btn-ghost" onClick={() => setEditingMessageId(null)}>Vazgeç</button>
+                                                            </div>
+                                                        ) : (
+                                                            <p className="msg-text" style={{ flex: 1 }}>
+                                                                {msg.icerik}
+                                                                {msg.duzenlendi_mi && <span style={{ color: 'var(--text-muted)', fontSize: 11 }}> · düzenlendi</span>}
+                                                            </p>
+                                                        )}
                                                         
                                                         {/* Actions on Hover */}
                                                         <div className="msg-actions">
@@ -310,6 +340,15 @@ export default function ChatPage() {
                                                             >
                                                                 ↩
                                                             </button>
+                                                            {isOwn && (
+                                                                <button
+                                                                    title="Düzenle"
+                                                                    className="reply-msg-btn"
+                                                                    onClick={() => { setEditingMessageId(msg._id); setEditingText(msg.icerik); }}
+                                                                >
+                                                                    ✎
+                                                                </button>
+                                                            )}
                                                             {(isOwn || isAdmin) && (
                                                                 <button
                                                                     title="Sil"

@@ -28,6 +28,21 @@ const UserSchema = new Schema(
             enum: ['user', 'admin', 'moderator'],
             default: 'user',
         },
+        extra_roles: {
+            type: [String],
+            enum: ['vip', 'support', 'founder', 'tester'],
+            default: [],
+        },
+        profil_fotografi_url: {
+            type: String,
+            default: '',
+            trim: true,
+        },
+        durum_modu: {
+            type: String,
+            enum: ['online', 'idle', 'dnd', 'invisible'],
+            default: 'online',
+        },
         son_cevrimici_tarihi: {
             type: Date,
             default: null,

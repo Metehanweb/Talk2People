@@ -18,7 +18,7 @@ export class MessageRepo extends BaseRepo {
             .sort({ olusturulma_tarihi: -1 })
             .skip(skip)
             .limit(limit)
-            .populate('gonderen', 'username email role')
+            .populate('gonderen', 'username email role extra_roles profil_fotografi_url durum_modu')
             .populate({
                 path: 'alinti_yapilan_mesaj',
                 populate: { path: 'gonderen', select: 'username' }

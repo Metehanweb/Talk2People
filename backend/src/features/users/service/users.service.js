@@ -1,7 +1,7 @@
 import { Injectable, Dependencies, NotFoundException } from '@nestjs/common';
 import { UserRepo } from '../repo/user.repo';
 import { FriendshipRepo } from '../../friends/repo/friendship.repo';
-import { ALL_ROLES } from '../../../shared/constants/roles.enum';
+import { ALL_EXTRA_ROLES, ALL_ROLES } from '../../../shared/constants/roles.enum';
 import { successResponse, listResponse } from '../../../shared/response/response.helper';
 
 @Injectable()
@@ -76,6 +76,33 @@ export class UsersService {
         return successResponse(updated);
     }
 
+    async updateExtraRoles(id, extraRoles = []) {
+        const user = await this.userRepo.get_one(id);
+        if (!user) {
+            throw new NotFoundException('Kullanici bulunamadi');
+        }
+
+        const roles = Array.isArray(extraRoles) ? extraRoles : [];
+        const safeRoles = [...new Set(roles.filter(role => ALL_EXTRA_ROLES.includes(role)))];
+        const updated = await this.userRepo.patch(id, { extra_roles: safeRoles });
+        return successResponse(updated);
+    }
+
+    async updateMyProfile(userId, body = {}) {
+        const updates = {};
+
+        if (typeof body.profil_fotografi_url === 'string') {
+            updates.profil_fotografi_url = body.profil_fotografi_url.trim().slice(0, 500);
+        }
+
+        if (body.durum_modu && ['online', 'idle', 'dnd', 'invisible'].includes(body.durum_modu)) {
+            updates.durum_modu = body.durum_modu;
+        }
+
+        const updated = await this.userRepo.patch(userId, updates);
+        return successResponse(this.withPresence(updated));
+    }
+
     withPresence(user) {
         const userObject = typeof user.toJSON === 'function' ? user.toJSON() : user;
         return {
@@ -90,7 +117,7 @@ export class UsersService {
 
         return {
             son_cevrimici_tarihi: lastSeen,
-            cevrimici_mi: user.aktif_mi !== false && lastSeenTime > 0 && Date.now() - lastSeenTime < 60000,
+            cevrimici_mi: user.aktif_mi !== false && user.durum_modu !== 'invisible' && lastSeenTime > 0 && Date.now() - lastSeenTime < 60000,
         };
     }
 }

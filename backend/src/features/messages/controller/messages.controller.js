@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Param, Query, Body, Req, UseGuards, Dependencies, Bind } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Query, Body, Req, UseGuards, Dependencies, Bind } from '@nestjs/common';
 import { MessagesService } from '../service/messages.service';
 import { ChatGateway } from '../gateway/chat.gateway';
 import { JwtAuthGuard } from '../../../shared/guards/jwt-auth.guard';
@@ -36,6 +36,23 @@ export class MessagesController {
             this.chatGateway.server.to(channelId).emit('message_deleted', { messageId: id, channelId });
         }
         
+        return result;
+    }
+
+    @Patch(':id')
+    @UseGuards(JwtAuthGuard)
+    @Bind(Param('channelId'), Param('id'), Body(), Req())
+    async editMessage(channelId, id, body, req) {
+        const result = await this.messagesService.editMessage(id, req.user.userId, body.icerik);
+
+        if (this.chatGateway && this.chatGateway.server) {
+            this.chatGateway.server.to(channelId).emit('message_updated', {
+                messageId: id,
+                channelId,
+                message: result.data,
+            });
+        }
+
         return result;
     }
 

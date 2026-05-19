@@ -94,6 +94,20 @@ export const usersService = {
             body: JSON.stringify({ aktif_mi }),
         });
     },
+
+    async updateExtraRoles(id, extra_roles) {
+        return fetchAPI(`/users/${id}/extra-roles`, {
+            method: 'PATCH',
+            body: JSON.stringify({ extra_roles }),
+        });
+    },
+
+    async updateMyProfile(data) {
+        return fetchAPI('/users/me/profile', {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        });
+    },
 };
 
 export const adminService = {
@@ -149,6 +163,13 @@ export const messagesService = {
         return fetchAPI(`/channels/${channelId}/messages/${messageId}`, { method: 'DELETE' });
     },
 
+    async editMessage(channelId, messageId, icerik) {
+        return fetchAPI(`/channels/${channelId}/messages/${messageId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ icerik }),
+        });
+    },
+
     async reactToMessage(channelId, messageId, emoji) {
         return fetchAPI(`/channels/${channelId}/messages/${messageId}/react`, {
             method: 'POST',
@@ -199,5 +220,16 @@ export const dmService = {
             method: 'POST',
             body: JSON.stringify({ icerik }),
         });
+    },
+
+    async editMessage(messageId, icerik) {
+        return fetchAPI(`/dm/messages/${messageId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ icerik }),
+        });
+    },
+
+    async deleteMessage(messageId) {
+        return fetchAPI(`/dm/messages/${messageId}`, { method: 'DELETE' });
     },
 };

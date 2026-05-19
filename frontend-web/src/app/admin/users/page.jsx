@@ -11,6 +11,22 @@ const roleConfig = {
     user: { label: '👤 Kullanıcı', badgeClass: 'badge-gray' },
 };
 
+const extraRoleConfig = {
+    vip: 'VIP',
+    support: 'Destek',
+    founder: 'Kurucu',
+    tester: 'Test',
+};
+
+function Avatar({ user, className = 'user-avatar', style = {} }) {
+    const url = user?.profil_fotografi_url;
+    return (
+        <div className={className} style={url ? { ...style, backgroundImage: `url(${url})`, backgroundSize: 'cover', backgroundPosition: 'center' } : style}>
+            {!url && (user?.username || '?')[0].toUpperCase()}
+        </div>
+    );
+}
+
 function formatDate(value, options = {}) {
     if (!value) return '-';
     return new Date(value).toLocaleDateString('tr-TR', options);
@@ -99,6 +115,21 @@ export default function AdminUsersPage() {
         try {
             await usersService.updateUserStatus(userId, newStatus);
             setSuccess('Kullanıcı durumu güncellendi!');
+            setTimeout(() => setSuccess(''), 3000);
+            fetchUsers();
+        } catch (err) {
+            setError(err.message);
+        }
+    }
+
+    async function handleExtraRoleToggle(user, role) {
+        try {
+            const current = Array.isArray(user.extra_roles) ? user.extra_roles : [];
+            const next = current.includes(role)
+                ? current.filter(item => item !== role)
+                : [...current, role];
+            await usersService.updateExtraRoles(user._id, next);
+            setSuccess('Ek roller güncellendi!');
             setTimeout(() => setSuccess(''), 3000);
             fetchUsers();
         } catch (err) {
@@ -200,9 +231,7 @@ export default function AdminUsersPage() {
                                             <tr key={user._id} className="clickable-user-row" onClick={() => setSelectedUser(user)}>
                                                 <td>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                                        <div className="user-avatar" style={{ width: 30, height: 30, fontSize: 12 }}>
-                                                            {(user.username || '?')[0].toUpperCase()}
-                                                        </div>
+                                                        <Avatar user={user} style={{ width: 30, height: 30, fontSize: 12 }} />
                                                         <span style={{ fontWeight: 600 }}>{user.username || user.ad}</span>
                                                     </div>
                                                 </td>
@@ -235,6 +264,18 @@ export default function AdminUsersPage() {
                                                                 {user.aktif_mi !== false ? 'Banla' : 'Banı Kaldır'}
                                                             </button>
                                                         </div>
+                                                        <div className="extra-role-controls" onClick={event => event.stopPropagation()}>
+                                                            {Object.entries(extraRoleConfig).map(([role, label]) => (
+                                                                <button
+                                                                    key={role}
+                                                                    type="button"
+                                                                    className={`extra-role-chip ${(user.extra_roles || []).includes(role) ? 'active' : ''}`}
+                                                                    onClick={() => handleExtraRoleToggle(user, role)}
+                                                                >
+                                                                    {label}
+                                                                </button>
+                                                            ))}
+                                                        </div>
                                                     </td>
                                                 )}
                                             </tr>
@@ -264,7 +305,7 @@ export default function AdminUsersPage() {
                     <div className="profile-modal" onClick={event => event.stopPropagation()}>
                         <button className="profile-modal-close" onClick={() => setSelectedUser(null)} title="Kapat">×</button>
                         <div className="profile-modal-header">
-                            <div className="profile-modal-avatar">{(selectedUser.username || '?')[0].toUpperCase()}</div>
+                            <Avatar user={selectedUser} className="profile-modal-avatar" />
                             <div>
                                 <div className="profile-modal-name">{selectedUser.username || selectedUser.ad}</div>
                                 <div className="profile-modal-email">{selectedUser.email}</div>
@@ -274,6 +315,10 @@ export default function AdminUsersPage() {
                             <div>
                                 <span>Rol</span>
                                 <strong>{(roleConfig[selectedUser.role] || roleConfig.user).label}</strong>
+                            </div>
+                            <div>
+                                <span>Ek roller</span>
+                                <strong>{(selectedUser.extra_roles || []).map(role => extraRoleConfig[role] || role).join(', ') || '-'}</strong>
                             </div>
                             <div>
                                 <span>Durum</span>

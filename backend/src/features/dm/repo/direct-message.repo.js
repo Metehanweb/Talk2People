@@ -25,8 +25,8 @@ export class DirectMessageRepo extends BaseRepo {
         const [data, total] = await Promise.all([
             this.model
                 .find(filters)
-                .populate('gonderen', 'username email role')
-                .populate('alici', 'username email role')
+                .populate('gonderen', 'username email role extra_roles profil_fotografi_url durum_modu')
+                .populate('alici', 'username email role extra_roles profil_fotografi_url durum_modu')
                 .sort({ olusturulma_tarihi: -1 })
                 .skip(skip)
                 .limit(safeLimit),
@@ -51,8 +51,8 @@ export class DirectMessageRepo extends BaseRepo {
                     { gonderen: userB, alici: userA },
                 ],
             })
-            .populate('gonderen', 'username email role')
-            .populate('alici', 'username email role')
+            .populate('gonderen', 'username email role extra_roles profil_fotografi_url durum_modu')
+            .populate('alici', 'username email role extra_roles profil_fotografi_url durum_modu')
             .sort({ olusturulma_tarihi: -1 });
     }
 
@@ -81,7 +81,7 @@ export class DirectMessageRepo extends BaseRepo {
                 okundu_mu: false,
                 silindi_mi: false,
             },
-            { $set: { okundu_mu: true } },
+            { $set: { okundu_mu: true, okundu_tarihi: new Date() } },
         );
     }
 }
