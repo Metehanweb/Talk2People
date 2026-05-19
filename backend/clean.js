@@ -1,0 +1,1 @@
+const mongoose = require('mongoose'); mongoose.connect('mongodb://localhost:27017/talk2people').then(async () => { await mongoose.connection.collection('voicesessions').updateMany({}, { $set: { aktif_mi: false } }); console.log('Cleaned'); process.exit(0); });
