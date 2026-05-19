@@ -33,6 +33,7 @@ export class WsJwtGuard {
             client.user = {
                 userId: user._id,
                 email: user.email,
+                username: user.username,
                 role: user.role,
             };
 

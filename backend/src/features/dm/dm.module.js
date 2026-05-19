@@ -7,17 +7,20 @@ import { DmController } from './controller/dm.controller';
 import { FriendsModule } from '../friends/friends.module';
 import { UsersModule } from '../users/users.module';
 import { AuthModule } from '../auth/auth.module';
+import { USER_BLOCK_MODEL_NAME, UserBlockSchema } from '../users/model/user-block.model';
+import { UserBlockRepo } from '../users/repo/user-block.repo';
 
 @Module({
     imports: [
         MongooseModule.forFeature([
             { name: DIRECT_MESSAGE_MODEL_NAME, schema: DirectMessageSchema },
+            { name: USER_BLOCK_MODEL_NAME, schema: UserBlockSchema },
         ]),
         FriendsModule,
         UsersModule,
         forwardRef(() => AuthModule),
     ],
-    providers: [DirectMessageRepo, DmService],
+    providers: [DirectMessageRepo, UserBlockRepo, DmService],
     controllers: [DmController],
     exports: [DirectMessageRepo, DmService],
 })

@@ -1,4 +1,4 @@
-import { Injectable, Dependencies, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, Injectable, Dependencies, NotFoundException } from '@nestjs/common';
 import { MessageRepo } from '../repo/message.repo';
 import { ChannelsService } from '../../channels/service/channels.service';
 import { successResponse, listResponse } from '../../../shared/response/response.helper';
@@ -52,36 +52,27 @@ export class MessagesService {
         });
     }
 
-    async deleteMessage(messageId, userId, userRole) {
+    async deleteMessage(channelId, messageId, user) {
+        await this.channelsService.validateChannelAccess(channelId, user, {});
         const message = await this.messageRepo.get_one(messageId);
         if (!message) {
             throw new NotFoundException('Mesaj bulunamadı');
-        }
-
-        const isOwner = message.gonderen.toString() === userId;
-        const isAdmin = userRole === 'admin';
-
-        if (!isOwner && !isAdmin) {
-            throw new ForbiddenException('Bu mesajı silme yetkiniz yok');
         }
 
         await this.messageRepo.soft_delete(messageId);
         return successResponse({ message: 'Mesaj silindi' });
     }
 
-    async editMessage(messageId, userId, content) {
+    async editMessage(channelId, messageId, user, content) {
+        await this.channelsService.validateChannelAccess(channelId, user, {});
         const message = await this.messageRepo.get_one(messageId);
         if (!message) {
             throw new NotFoundException('Mesaj bulunamadi');
         }
 
-        if (message.gonderen.toString() !== userId) {
-            throw new ForbiddenException('Bu mesaji duzenleme yetkiniz yok');
-        }
-
         const text = String(content || '').trim();
         if (!text) {
-            throw new ForbiddenException('Mesaj bos olamaz');
+            throw new BadRequestException('Mesaj bos olamaz');
         }
 
         const updated = await this.messageRepo.patch(messageId, {

@@ -56,4 +56,18 @@ export class ChatGateway {
         // Odaya (kanala) yeni mesajı yayınla
         this.server.to(channelId).emit('new_message', result.data);
     }
+
+    @UseGuards(WsJwtGuard)
+    @SubscribeMessage('typing_channel')
+    @Bind(ConnectedSocket(), MessageBody())
+    async handleTyping(client, data) {
+        const { channelId, isTyping } = data;
+        await this.channelsService.validateChannelAccess(channelId, client.user, data || {});
+        client.to(channelId).emit('channel_typing', {
+            channelId,
+            userId: client.user.userId,
+            username: client.user.username || client.user.email,
+            isTyping: Boolean(isTyping),
+        });
+    }
 }

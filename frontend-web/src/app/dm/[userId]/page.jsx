@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { io } from 'socket.io-client';
-import { authService, dmService } from '../../../lib/api';
+import { adminService, authService, dmService, usersService } from '../../../lib/api';
 import Sidebar from '../../../shared/Sidebar';
 
 const API_BASE = 'http://localhost:3000';
@@ -19,6 +19,8 @@ export default function DmPage() {
     const params = useParams();
     const bottomRef = useRef(null);
     const socketRef = useRef(null);
+    const dmSocketRef = useRef(null);
+    const typingTimeoutRef = useRef(null);
     const localStreamRef = useRef(null);
     const peersRef = useRef(new Map());
     const speakingWatchersRef = useRef(new Map());
@@ -41,6 +43,10 @@ export default function DmPage() {
     const [speakingSockets, setSpeakingSockets] = useState(new Set());
     const [remoteStreams, setRemoteStreams] = useState([]);
     const [remoteUsers, setRemoteUsers] = useState([]);
+    const [remoteTyping, setRemoteTyping] = useState(false);
+    const [callNotice, setCallNotice] = useState('');
+    const [callStartedAt, setCallStartedAt] = useState(null);
+    const [callDuration, setCallDuration] = useState(0);
 
     useEffect(() => { checkAuth(); }, [targetUserId]);
     useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
@@ -48,8 +54,20 @@ export default function DmPage() {
     useEffect(() => {
         return () => {
             leaveVoiceCall();
+            if (dmSocketRef.current) {
+                dmSocketRef.current.disconnect();
+                dmSocketRef.current = null;
+            }
         };
     }, []);
+
+    useEffect(() => {
+        if (!callStartedAt) return;
+        const interval = setInterval(() => {
+            setCallDuration(Math.floor((Date.now() - callStartedAt) / 1000));
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [callStartedAt]);
 
     useEffect(() => {
         remoteStreams.forEach(item => {
@@ -65,6 +83,7 @@ export default function DmPage() {
             const res = await authService.getMe();
             setCurrentUser(res.data.user);
             await fetchMessages();
+            connectDmSocket();
         } catch (err) {
             if (err.message?.toLowerCase().includes('token') || err.message?.toLowerCase().includes('unauthorized')) {
                 router.push('/auth/login');
@@ -93,10 +112,68 @@ export default function DmPage() {
             const res = await dmService.sendMessage(targetUserId, text);
             setMessages(items => [...items, res.data]);
             setMessage('');
+            emitTyping(false);
         } catch (err) {
             setError(err.message);
         } finally {
             setSending(false);
+        }
+    }
+
+    function connectDmSocket() {
+        const token = localStorage.getItem('token');
+        if (!token || dmSocketRef.current) return;
+        dmSocketRef.current = io(API_BASE, { auth: { token } });
+        dmSocketRef.current.on('connect', () => {
+            dmSocketRef.current.emit('join_dm_room', { targetUserId });
+        });
+        dmSocketRef.current.on('dm_typing', data => {
+            if (String(data.userId) !== String(targetUserId)) return;
+            setRemoteTyping(Boolean(data.isTyping));
+        });
+        dmSocketRef.current.on('incoming_dm_call', data => {
+            setCallNotice(`${data.username || 'Bir kullanıcı'} seni sesli arıyor.`);
+        });
+        dmSocketRef.current.on('missed_dm_call', () => {
+            setCallNotice('Cevapsız sesli arama var.');
+        });
+    }
+
+    function emitTyping(isTyping) {
+        if (!dmSocketRef.current?.connected) return;
+        dmSocketRef.current.emit('dm_typing', { targetUserId, isTyping });
+    }
+
+    function handleMessageChange(value) {
+        setMessage(value);
+        emitTyping(Boolean(value.trim()));
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => emitTyping(false), 1200);
+    }
+
+    async function handleReportMessage(item) {
+        const reason = prompt('Rapor nedeni nedir?');
+        if (!reason?.trim()) return;
+        try {
+            await adminService.createReport({
+                hedef_tipi: 'dm_message',
+                hedef_id: item._id,
+                hedef_kullanici: item.gonderen?._id || item.gonderen,
+                neden: reason.trim(),
+            });
+            setCallNotice('Rapor admin ekibine iletildi.');
+        } catch (err) {
+            setError(err.message);
+        }
+    }
+
+    async function handleBlockUser() {
+        if (!confirm(`${targetUser?.username || 'Bu kullanıcı'} engellensin mi?`)) return;
+        try {
+            await usersService.blockUser(targetUserId);
+            setCallNotice('Kullanıcı engellendi. Artık karşılıklı DM gönderilemez.');
+        } catch (err) {
+            setError(err.message);
         }
     }
 
@@ -146,6 +223,8 @@ export default function DmPage() {
             socketRef.current.on('exception', err => setVoiceError(err?.message || 'Sesli görüşme başlatılamadı.'));
 
             setInVoiceCall(true);
+            setCallStartedAt(Date.now());
+            setCallDuration(0);
         } catch (err) {
             cleanupVoiceResources();
             setVoiceError(err.message || 'Sesli görüşme başlatılamadı.');
@@ -183,6 +262,8 @@ export default function DmPage() {
 
         cleanupVoiceResources();
         setInVoiceCall(false);
+        setCallStartedAt(null);
+        setCallDuration(0);
         setRemoteUsers([]);
     }
 
@@ -372,6 +453,7 @@ export default function DmPage() {
 
     const currentUserId = currentUser?._id || currentUser?.userId;
     const remoteSpeaking = speakingSockets.size > 0;
+    const formattedCallDuration = `${String(Math.floor(callDuration / 60)).padStart(2, '0')}:${String(callDuration % 60).padStart(2, '0')}`;
 
     function renderAvatar(user, className = 'user-avatar', style = {}) {
         const url = user?.profil_fotografi_url;
@@ -425,6 +507,7 @@ export default function DmPage() {
                                 <button className="voice-leave-btn" onClick={leaveVoiceCall} title="Görüşmeden Ayrıl">📵</button>
                             </>
                         )}
+                        <button className="btn btn-ghost" onClick={handleBlockUser}>Engelle</button>
                         <button className="btn btn-ghost" onClick={() => router.push('/dm')}>DM Listesi</button>
                     </div>
                 </div>
@@ -432,6 +515,7 @@ export default function DmPage() {
                 <div className="page-body" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 150px)', gap: 16 }}>
                     {error && <div className="alert-error">⚠️ {error}</div>}
                     {voiceError && <div className="alert-error">⚠️ {voiceError}</div>}
+                    {callNotice && <div className="alert-success">ℹ️ {callNotice}</div>}
 
                     {inVoiceCall && (
                         <div className="dm-voice-panel">
@@ -443,6 +527,8 @@ export default function DmPage() {
                                         : remoteUsers.length > 0 || remoteStreams.length > 0
                                             ? `${targetUser?.username || 'Arkadaşın'} bağlandı`
                                             : `${targetUser?.username || 'Arkadaşın'} katıldığında ses otomatik bağlanır`}
+                                    {' · '}
+                                    Süre {formattedCallDuration}
                                 </div>
                             </div>
                             <div className="dm-voice-users">
@@ -495,10 +581,15 @@ export default function DmPage() {
                                                 {item.duzenlendi_mi && ' · düzenlendi'}
                                                 {mine && ` · ${item.okundu_mu ? 'Okundu' : 'Gönderildi'}`}
                                             </div>
-                                            {mine && editingMessageId !== item._id && (
-                                                <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
+                                            {editingMessageId !== item._id && (
+                                                <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: mine ? 'flex-end' : 'flex-start' }}>
                                                     <button type="button" className="message-mini-action" onClick={() => { setEditingMessageId(item._id); setEditingText(item.icerik); }}>Düzenle</button>
                                                     <button type="button" className="message-mini-action danger" onClick={() => handleDeleteMessage(item._id)}>Sil</button>
+                                                </div>
+                                            )}
+                                            {!mine && (
+                                                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                                                    <button type="button" className="message-mini-action" onClick={() => handleReportMessage(item)}>Raporla</button>
                                                 </div>
                                             )}
                                         </div>
@@ -509,11 +600,17 @@ export default function DmPage() {
                         )}
                     </div>
 
+                    {remoteTyping && (
+                        <div style={{ color: 'var(--text-secondary)', fontSize: 13, paddingLeft: 4 }}>
+                            {targetUser?.username || 'Karşı taraf'} yazıyor...
+                        </div>
+                    )}
+
                     <form onSubmit={handleSend} style={{ display: 'flex', gap: 10 }}>
                         <input
                             className="field-input"
                             value={message}
-                            onChange={e => setMessage(e.target.value)}
+                            onChange={e => handleMessageChange(e.target.value)}
                             placeholder={`${targetUser?.username || 'Arkadaşına'} mesaj yaz`}
                             maxLength={2000}
                         />

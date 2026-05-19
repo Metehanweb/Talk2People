@@ -18,6 +18,8 @@ export class VoiceGateway {
         this.dmService = dmService;
         this.activeConnections = new Map(); // socketId -> { channelId, userId }
         this.activeDmConnections = new Map(); // socketId -> { roomName, targetUserId, userId }
+        this.dmPresenceConnections = new Map(); // socketId -> { roomName, targetUserId, userId }
+        this.userSockets = new Map(); // userId -> Set(socketId)
     }
 
     @WebSocketServer()
@@ -58,6 +60,36 @@ export class VoiceGateway {
     }
 
     @UseGuards(WsJwtGuard)
+    @SubscribeMessage('join_dm_room')
+    @Bind(ConnectedSocket(), MessageBody())
+    async handleJoinDmRoom(client, data) {
+        const { targetUserId } = data;
+        await this.dmService.ensureCanMessage(client.user.userId, targetUserId);
+        const roomName = this.getDmVoiceRoomName(client.user.userId, targetUserId).replace('dm_voice_', 'dm_');
+        client.join(roomName);
+        this.dmPresenceConnections.set(client.id, {
+            roomName,
+            targetUserId,
+            userId: client.user.userId,
+        });
+        this.addUserSocket(client.user.userId, client.id);
+    }
+
+    @UseGuards(WsJwtGuard)
+    @SubscribeMessage('dm_typing')
+    @Bind(ConnectedSocket(), MessageBody())
+    async handleDmTyping(client, data) {
+        const { targetUserId, isTyping } = data;
+        await this.dmService.ensureCanMessage(client.user.userId, targetUserId);
+        const roomName = this.getDmVoiceRoomName(client.user.userId, targetUserId).replace('dm_voice_', 'dm_');
+        client.to(roomName).emit('dm_typing', {
+            userId: client.user.userId,
+            username: client.user.username || client.user.email,
+            isTyping: Boolean(isTyping),
+        });
+    }
+
+    @UseGuards(WsJwtGuard)
     @SubscribeMessage('join_dm_voice')
     @Bind(ConnectedSocket(), MessageBody())
     async handleJoinDmVoice(client, data) {
@@ -70,6 +102,21 @@ export class VoiceGateway {
             roomName,
             targetUserId,
             userId: client.user.userId,
+            joinedAt: Date.now(),
+            answered: false,
+        });
+
+        this.activeDmConnections.forEach(conn => {
+            if (conn.roomName === roomName && conn.userId !== client.user.userId) {
+                conn.answered = true;
+                const own = this.activeDmConnections.get(client.id);
+                if (own) own.answered = true;
+            }
+        });
+
+        this.emitToUser(targetUserId, 'incoming_dm_call', {
+            fromUserId: client.user.userId,
+            username: user?.username || client.user.username || client.user.email,
         });
 
         client.to(roomName).emit('user_joined_voice', {
@@ -92,6 +139,12 @@ export class VoiceGateway {
             socketId: client.id,
             userId: client.user.userId,
         });
+
+        if (!conn.answered && Date.now() - (conn.joinedAt || Date.now()) > 5000) {
+            this.emitToUser(conn.targetUserId, 'missed_dm_call', {
+                fromUserId: conn.userId,
+            });
+        }
     }
 
     @UseGuards(WsJwtGuard)
@@ -134,9 +187,38 @@ export class VoiceGateway {
             });
             this.activeDmConnections.delete(client.id);
         }
+
+        const dmPresence = this.dmPresenceConnections.get(client.id);
+        if (dmPresence) {
+            client.leave(dmPresence.roomName);
+            this.dmPresenceConnections.delete(client.id);
+        }
+
+        this.removeUserSocket(client.user?.userId, client.id);
     }
 
     getDmVoiceRoomName(userA, userB) {
         return `dm_voice_${[String(userA), String(userB)].sort().join('_')}`;
+    }
+
+    addUserSocket(userId, socketId) {
+        const key = String(userId);
+        if (!this.userSockets.has(key)) this.userSockets.set(key, new Set());
+        this.userSockets.get(key).add(socketId);
+    }
+
+    removeUserSocket(userId, socketId) {
+        if (!userId) return;
+        const key = String(userId);
+        const sockets = this.userSockets.get(key);
+        if (!sockets) return;
+        sockets.delete(socketId);
+        if (sockets.size === 0) this.userSockets.delete(key);
+    }
+
+    emitToUser(userId, event, payload) {
+        const sockets = this.userSockets.get(String(userId));
+        if (!sockets) return;
+        sockets.forEach(socketId => this.server.to(socketId).emit(event, payload));
     }
 }

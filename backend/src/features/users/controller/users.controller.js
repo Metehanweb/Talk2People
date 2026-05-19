@@ -31,9 +31,9 @@ export class UsersController {
     @Patch(':id/role')
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles(ROLES.ADMIN)
-    @Bind(Param('id'), Body())
-    async updateUserRole(id, body) {
-        return this.usersService.updateUserRole(id, body.role);
+    @Bind(Param('id'), Body(), Req())
+    async updateUserRole(id, body, req) {
+        return this.usersService.updateUserRole(id, body.role, req.user);
     }
 
     @Patch('me/profile')
@@ -46,16 +46,37 @@ export class UsersController {
     @Patch(':id/extra-roles')
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles(ROLES.ADMIN)
-    @Bind(Param('id'), Body())
-    async updateExtraRoles(id, body) {
-        return this.usersService.updateExtraRoles(id, body.extra_roles);
+    @Bind(Param('id'), Body(), Req())
+    async updateExtraRoles(id, body, req) {
+        return this.usersService.updateExtraRoles(id, body.extra_roles, req.user);
     }
 
     @Patch(':id/status')
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles(ROLES.ADMIN)
-    @Bind(Param('id'), Body())
-    async toggleUserStatus(id, body) {
-        return this.usersService.toggleUserStatus(id, body.aktif_mi);
+    @Bind(Param('id'), Body(), Req())
+    async toggleUserStatus(id, body, req) {
+        return this.usersService.toggleUserStatus(id, body.aktif_mi, req.user);
+    }
+
+    @Get('me/blocked')
+    @UseGuards(JwtAuthGuard)
+    @Bind(Req())
+    async getBlockedUsers(req) {
+        return this.usersService.getBlockedUsers(req.user.userId);
+    }
+
+    @Patch(':id/block')
+    @UseGuards(JwtAuthGuard)
+    @Bind(Param('id'), Req())
+    async blockUser(id, req) {
+        return this.usersService.blockUser(req.user.userId, id);
+    }
+
+    @Patch(':id/unblock')
+    @UseGuards(JwtAuthGuard)
+    @Bind(Param('id'), Req())
+    async unblockUser(id, req) {
+        return this.usersService.unblockUser(req.user.userId, id);
     }
 }

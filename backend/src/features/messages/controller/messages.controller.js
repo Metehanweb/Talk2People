@@ -29,7 +29,7 @@ export class MessagesController {
     @UseGuards(JwtAuthGuard)
     @Bind(Param('channelId'), Param('id'), Req())
     async deleteMessage(channelId, id, req) {
-        const result = await this.messagesService.deleteMessage(id, req.user.userId, req.user.role);
+        const result = await this.messagesService.deleteMessage(channelId, id, req.user);
         
         // Silme işlemini odaya bildir (canlı güncelleme)
         if (this.chatGateway && this.chatGateway.server) {
@@ -43,7 +43,7 @@ export class MessagesController {
     @UseGuards(JwtAuthGuard)
     @Bind(Param('channelId'), Param('id'), Body(), Req())
     async editMessage(channelId, id, body, req) {
-        const result = await this.messagesService.editMessage(id, req.user.userId, body.icerik);
+        const result = await this.messagesService.editMessage(channelId, id, req.user, body.icerik);
 
         if (this.chatGateway && this.chatGateway.server) {
             this.chatGateway.server.to(channelId).emit('message_updated', {

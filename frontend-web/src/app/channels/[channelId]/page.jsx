@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { io } from 'socket.io-client';
-import { authService, channelsService, messagesService } from '../../../lib/api';
+import { adminService, authService, channelsService, messagesService } from '../../../lib/api';
 import Sidebar from '../../../shared/Sidebar';
 
 export default function ChatPage() {
@@ -24,8 +24,10 @@ export default function ChatPage() {
     const [channelPassword, setChannelPassword] = useState('');
     const [needsPassword, setNeedsPassword] = useState(false);
     const [connected, setConnected] = useState(false);
+    const [typingUsers, setTypingUsers] = useState([]);
     const messagesEndRef = useRef(null);
     const socketRef = useRef(null);
+    const typingTimeoutRef = useRef(null);
 
     useEffect(() => { checkAuth(); }, []);
 
@@ -54,6 +56,12 @@ export default function ChatPage() {
             socketRef.current.on('message_updated', (data) => {
                 setMessages(prev => prev.map(msg => msg._id === data.messageId ? data.message : msg));
             });
+            socketRef.current.on('channel_typing', (data) => {
+                setTypingUsers(prev => {
+                    const others = prev.filter(item => item.userId !== data.userId);
+                    return data.isTyping ? [...others, data] : others;
+                });
+            });
             socketRef.current.on('exception', (err) => {
                 setError(err.message || 'Bir bağlantı hatası oluştu');
             });
@@ -66,6 +74,7 @@ export default function ChatPage() {
                     socketRef.current.off('message_deleted');
                     socketRef.current.off('message_reaction_updated');
                     socketRef.current.off('message_updated');
+                    socketRef.current.off('channel_typing');
                     socketRef.current.off('exception');
                     socketRef.current.disconnect();
                 }
@@ -146,7 +155,20 @@ export default function ChatPage() {
             kanal_sifresi: channelPassword
         });
         setNewMessage('');
+        emitTyping(false);
         setReplyingTo(null);
+    }
+
+    function emitTyping(isTyping) {
+        if (!socketRef.current?.connected) return;
+        socketRef.current.emit('typing_channel', { channelId, isTyping, kanal_sifresi: channelPassword });
+    }
+
+    function handleInputChange(value) {
+        setNewMessage(value);
+        emitTyping(Boolean(value.trim()));
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => emitTyping(false), 1200);
     }
 
     async function handleDelete(messageId) {
@@ -179,6 +201,22 @@ export default function ChatPage() {
             // WebSocket üzerinden 'message_reaction_updated' eventi ile anında güncellenecek
         } catch (err) {
             console.error('Tepki eklenirken hata oluştu', err);
+        }
+    }
+
+    async function handleReport(msg) {
+        const reason = prompt('Rapor nedeni nedir?');
+        if (!reason?.trim()) return;
+        try {
+            await adminService.createReport({
+                hedef_tipi: 'channel_message',
+                hedef_id: msg._id,
+                hedef_kullanici: msg.gonderen?._id,
+                neden: reason.trim(),
+            });
+            setError('');
+        } catch (err) {
+            setError(err.message);
         }
     }
 
@@ -340,24 +378,29 @@ export default function ChatPage() {
                                                             >
                                                                 ↩
                                                             </button>
-                                                            {isOwn && (
+                                                            <button
+                                                                title="Düzenle"
+                                                                className="reply-msg-btn"
+                                                                onClick={() => { setEditingMessageId(msg._id); setEditingText(msg.icerik); }}
+                                                            >
+                                                                ✎
+                                                            </button>
+                                                            {!isOwn && (
                                                                 <button
-                                                                    title="Düzenle"
+                                                                    title="Raporla"
                                                                     className="reply-msg-btn"
-                                                                    onClick={() => { setEditingMessageId(msg._id); setEditingText(msg.icerik); }}
+                                                                    onClick={() => handleReport(msg)}
                                                                 >
-                                                                    ✎
+                                                                    !
                                                                 </button>
                                                             )}
-                                                            {(isOwn || isAdmin) && (
-                                                                <button
-                                                                    title="Sil"
-                                                                    onClick={() => handleDelete(msg._id)}
-                                                                    className="delete-msg-btn"
-                                                                >
-                                                                    ✕
-                                                                </button>
-                                                            )}
+                                                            <button
+                                                                title="Sil"
+                                                                onClick={() => handleDelete(msg._id)}
+                                                                className="delete-msg-btn"
+                                                            >
+                                                                ✕
+                                                            </button>
                                                         </div>
 
                                                         {/* Emoji Picker Popup */}
@@ -422,13 +465,18 @@ export default function ChatPage() {
                                 <button onClick={() => setReplyingTo(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>✕</button>
                             </div>
                         )}
+                        {typingUsers.length > 0 && (
+                            <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 8 }}>
+                                {typingUsers.map(item => item.username).join(', ')} yazıyor...
+                            </div>
+                        )}
                         <form onSubmit={handleSend}>
                             <div className="chat-input-wrapper" style={{ borderRadius: replyingTo ? '0 0 14px 14px' : '14px' }}>
                                 <input
                                     type="text"
                                     className="chat-input"
                                     value={newMessage}
-                                    onChange={e => setNewMessage(e.target.value)}
+                                    onChange={e => handleInputChange(e.target.value)}
                                     placeholder={`#${channel?.ad || '...'} kanalına mesaj gönder`}
                                 />
                                 <button type="submit" className="chat-send-btn" disabled={!newMessage.trim()}>

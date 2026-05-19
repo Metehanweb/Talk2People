@@ -108,12 +108,48 @@ export const usersService = {
             body: JSON.stringify(data),
         });
     },
+
+    async getBlockedUsers() {
+        return fetchAPI('/users/me/blocked', { method: 'GET' });
+    },
+
+    async blockUser(id) {
+        return fetchAPI(`/users/${id}/block`, { method: 'PATCH' });
+    },
+
+    async unblockUser(id) {
+        return fetchAPI(`/users/${id}/unblock`, { method: 'PATCH' });
+    },
 };
 
 export const adminService = {
     async getStats() {
         return fetchAPI('/admin/stats', { method: 'GET' });
-    }
+    },
+
+    async createReport(data) {
+        return fetchAPI('/admin/reports', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    async getReports(params = {}) {
+        const query = new URLSearchParams(params).toString();
+        return fetchAPI(`/admin/reports${query ? `?${query}` : ''}`, { method: 'GET' });
+    },
+
+    async updateReport(id, data) {
+        return fetchAPI(`/admin/reports/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        });
+    },
+
+    async getLogs(params = {}) {
+        const query = new URLSearchParams(params).toString();
+        return fetchAPI(`/admin/logs${query ? `?${query}` : ''}`, { method: 'GET' });
+    },
 };
 
 export const channelsService = {

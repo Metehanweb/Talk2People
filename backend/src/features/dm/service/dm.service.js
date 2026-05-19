@@ -2,15 +2,17 @@ import { Injectable, Dependencies, BadRequestException, ForbiddenException, NotF
 import { DirectMessageRepo } from '../repo/direct-message.repo';
 import { FriendshipRepo } from '../../friends/repo/friendship.repo';
 import { UserRepo } from '../../users/repo/user.repo';
+import { UserBlockRepo } from '../../users/repo/user-block.repo';
 import { successResponse, listResponse } from '../../../shared/response/response.helper';
 
 @Injectable()
-@Dependencies(DirectMessageRepo, FriendshipRepo, UserRepo)
+@Dependencies(DirectMessageRepo, FriendshipRepo, UserRepo, UserBlockRepo)
 export class DmService {
-    constructor(directMessageRepo, friendshipRepo, userRepo) {
+    constructor(directMessageRepo, friendshipRepo, userRepo, userBlockRepo) {
         this.directMessageRepo = directMessageRepo;
         this.friendshipRepo = friendshipRepo;
         this.userRepo = userRepo;
+        this.userBlockRepo = userBlockRepo;
     }
 
     async getConversations(userId) {
@@ -83,7 +85,7 @@ export class DmService {
             throw new NotFoundException('Mesaj bulunamadi');
         }
 
-        if (String(message.gonderen) !== String(userId)) {
+        if (!this.isConversationParticipant(message, userId)) {
             throw new ForbiddenException('Bu mesaji duzenleme yetkiniz yok');
         }
 
@@ -112,7 +114,7 @@ export class DmService {
             throw new NotFoundException('Mesaj bulunamadi');
         }
 
-        if (String(message.gonderen) !== String(userId)) {
+        if (!this.isConversationParticipant(message, userId)) {
             throw new ForbiddenException('Bu mesaji silme yetkiniz yok');
         }
 
@@ -146,6 +148,15 @@ export class DmService {
             throw new ForbiddenException('Özel mesaj göndermek için arkadaş olmalısınız');
         }
 
+        const block = await this.userBlockRepo.findBetween(userId, targetUserId);
+        if (block) {
+            throw new ForbiddenException('Bu kullanici ile mesajlasamazsiniz');
+        }
+
         return target;
+    }
+
+    isConversationParticipant(message, userId) {
+        return String(message.gonderen) === String(userId) || String(message.alici) === String(userId);
     }
 }
